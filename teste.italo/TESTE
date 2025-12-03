@@ -1,0 +1,728 @@
+// ============================================
+// ESTRUTURA DO PROJETO
+// ============================================
+/*
+infoclin-api/
+├── src/
+│   ├── types/
+│   │   └── article.types.ts
+│   ├── services/
+│   │   └── article.service.ts
+│   ├── controllers/
+│   │   └── article.controller.ts
+│   ├── modules/
+│   │   └── article.module.ts
+│   └── server.ts
+├── package.json
+└── tsconfig.json
+*/
+
+// ============================================
+// 1. package.json
+// ============================================
+/*
+{
+  "name": "infoclin-api",
+  "version": "1.0.0",
+  "description": "API de Artigos de Saúde - InfoClin",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "ts-node-dev": "^2.0.0"
+  }
+}
+*/
+
+// ============================================
+// 2. tsconfig.json
+// ============================================
+/*
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+*/
+
+// ============================================
+// 3. .env (criar na raiz do projeto)
+// ============================================
+/*
+PORT=3000
+NODE_ENV=development
+*/
+
+// ============================================
+// 4. src/types/article.types.ts
+// ============================================
+export interface IArticle {
+  id: number;
+  titulo: string;
+  resumo: string;
+  conteudo: string;
+  autor: string;
+  data: string;
+  categoria: string;
+  tempo: string;
+  imagem?: string;
+}
+
+export interface ArticleQueryParams {
+  categoria?: string;
+  autor?: string;
+  search?: string;
+}
+
+export interface CreateArticleDTO {
+  titulo: string;
+  resumo: string;
+  conteudo: string;
+  autor: string;
+  data: string;
+  categoria: string;
+  tempo: string;
+  imagem?: string;
+}
+
+export interface UpdateArticleDTO {
+  titulo?: string;
+  resumo?: string;
+  conteudo?: string;
+  autor?: string;
+  data?: string;
+  categoria?: string;
+  tempo?: string;
+  imagem?: string;
+}
+
+// ============================================
+// 5. src/services/article.service.ts
+// ============================================
+import { IArticle, CreateArticleDTO, UpdateArticleDTO, ArticleQueryParams } from '../types/article.types';
+
+export class ArticleService {
+  private articles: IArticle[] = [];
+  private nextId: number = 1;
+
+  constructor() {
+    this.seedArticles();
+  }
+
+  // Criar novo artigo
+  createArticle(data: CreateArticleDTO): IArticle {
+    const newArticle: IArticle = {
+      id: this.nextId++,
+      ...data
+    };
+
+    this.articles.push(newArticle);
+    return newArticle;
+  }
+
+  // Listar todos os artigos com filtros
+  getAllArticles(params?: ArticleQueryParams): IArticle[] {
+    let filteredArticles = [...this.articles];
+
+    if (params) {
+      // Filtrar por categoria
+      if (params.categoria) {
+        filteredArticles = filteredArticles.filter(
+          article => article.categoria.toLowerCase() === params.categoria?.toLowerCase()
+        );
+      }
+
+      // Filtrar por autor
+      if (params.autor) {
+        filteredArticles = filteredArticles.filter(
+          article => article.autor.toLowerCase().includes(params.autor?.toLowerCase() || '')
+        );
+      }
+
+      // Buscar no título e resumo
+      if (params.search) {
+        const searchLower = params.search.toLowerCase();
+        filteredArticles = filteredArticles.filter(
+          article =>
+            article.titulo.toLowerCase().includes(searchLower) ||
+            article.resumo.toLowerCase().includes(searchLower)
+        );
+      }
+    }
+
+    // Ordenar por data (mais recente primeiro)
+    return filteredArticles.sort((a, b) => {
+      return new Date(b.data).getTime() - new Date(a.data).getTime();
+    });
+  }
+
+  // Buscar artigo por ID
+  getArticleById(id: number): IArticle | null {
+    const article = this.articles.find(a => a.id === id);
+    return article || null;
+  }
+
+  // Atualizar artigo
+  updateArticle(id: number, data: UpdateArticleDTO): IArticle | null {
+    const index = this.articles.findIndex(a => a.id === id);
+
+    if (index === -1) {
+      return null;
+    }
+
+    this.articles[index] = {
+      ...this.articles[index],
+      ...data
+    };
+
+    return this.articles[index];
+  }
+
+  // Deletar artigo
+  deleteArticle(id: number): boolean {
+    const index = this.articles.findIndex(a => a.id === id);
+
+    if (index === -1) {
+      return false;
+    }
+
+    this.articles.splice(index, 1);
+    return true;
+  }
+
+  // Buscar artigos por categoria
+  getArticlesByCategory(categoria: string): IArticle[] {
+    return this.articles.filter(
+      article => article.categoria.toLowerCase() === categoria.toLowerCase()
+    );
+  }
+
+  // Contar total de artigos
+  countArticles(params?: ArticleQueryParams): number {
+    return this.getAllArticles(params).length;
+  }
+
+  // Popular com artigos iniciais
+  private seedArticles(): void {
+    const initialArticles: CreateArticleDTO[] = [
+      {
+        titulo: "Importância da Hidratação",
+        resumo: "Descubra como a água é essencial para o bom funcionamento do corpo humano.",
+        conteudo: `
+          <p>A hidratação adequada é fundamental para a manutenção da saúde. O corpo humano é composto por aproximadamente 60% de água, e cada sistema do nosso organismo depende dela para funcionar corretamente.</p>
+          
+          <p><strong>Benefícios da hidratação adequada:</strong></p>
+          <p>• Regula a temperatura corporal<br>
+          • Auxilia na digestão e absorção de nutrientes<br>
+          • Mantém a pele saudável<br>
+          • Elimina toxinas através dos rins<br>
+          • Melhora o desempenho físico e mental</p>
+          
+          <p>A desidratação pode causar fadiga, dores de cabeça, tontura e até problemas renais graves. Recomenda-se beber pelo menos 2 litros de água por dia, mas essa quantidade pode variar de acordo com o peso, atividade física e clima.</p>
+        `,
+        autor: "Dra. Maria Santos",
+        data: "2024-11-20",
+        categoria: "Nutrição",
+        tempo: "5 min",
+        imagem: "https://images.unsplash.com/photo-1560493676-04071c5f467b?w=800"
+      },
+      {
+        titulo: "Exercícios Físicos Regulares",
+        resumo: "Os benefícios da atividade física para corpo e mente.",
+        conteudo: `
+          <p>A prática regular de exercícios físicos é uma das melhores decisões que você pode tomar pela sua saúde. Os benefícios vão muito além da perda de peso e ganho de massa muscular.</p>
+          
+          <p><strong>Principais benefícios:</strong></p>
+          <p>• Fortalece o sistema cardiovascular<br>
+          • Reduz o risco de doenças crônicas<br>
+          • Melhora a saúde mental e reduz o estresse<br>
+          • Aumenta a disposição e energia<br>
+          • Fortalece ossos e músculos</p>
+          
+          <p>A Organização Mundial da Saúde recomenda pelo menos 150 minutos de atividade física moderada por semana para adultos.</p>
+        `,
+        autor: "Dr. Carlos Oliveira",
+        data: "2024-11-18",
+        categoria: "Atividade Física",
+        tempo: "6 min",
+        imagem: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800"
+      },
+      {
+        titulo: "Alimentação Balanceada",
+        resumo: "Como uma dieta equilibrada impacta sua qualidade de vida.",
+        conteudo: `
+          <p>Uma alimentação balanceada é a base para uma vida saudável. O que colocamos no prato todos os dias tem impacto direto em nossa energia, imunidade e bem-estar geral.</p>
+          
+          <p><strong>Princípios de uma alimentação saudável:</strong></p>
+          <p>• Variedade de alimentos naturais<br>
+          • Consumo adequado de frutas e vegetais<br>
+          • Proteínas de qualidade<br>
+          • Carboidratos integrais<br>
+          • Gorduras saudáveis</p>
+          
+          <p>Evite alimentos ultraprocessados e priorize alimentos in natura ou minimamente processados.</p>
+        `,
+        autor: "Dra. Ana Paula Silva",
+        data: "2024-11-15",
+        categoria: "Nutrição",
+        tempo: "7 min",
+        imagem: "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800"
+      },
+      {
+        titulo: "Qualidade do Sono",
+        resumo: "A importância de uma boa noite de sono para a saúde.",
+        conteudo: `
+          <p>O sono de qualidade é essencial para a recuperação física e mental. Durante o sono, o corpo realiza processos vitais de reparação e consolidação de memórias.</p>
+          
+          <p><strong>Benefícios de dormir bem:</strong></p>
+          <p>• Fortalece o sistema imunológico<br>
+          • Melhora a memória e concentração<br>
+          • Regula o humor e reduz ansiedade<br>
+          • Auxilia no controle do peso<br>
+          • Previne doenças cardíacas</p>
+          
+          <p>Adultos devem dormir entre 7 a 9 horas por noite. Estabelecer uma rotina regular de sono é fundamental para a saúde.</p>
+        `,
+        autor: "Dr. Roberto Mendes",
+        data: "2024-11-12",
+        categoria: "Bem-estar",
+        tempo: "5 min",
+        imagem: "https://images.unsplash.com/photo-1511988617509-a57c8a288659?w=800"
+      },
+      {
+        titulo: "Saúde Mental no Trabalho",
+        resumo: "Como cuidar da saúde mental no ambiente profissional.",
+        conteudo: `
+          <p>A saúde mental no trabalho é tão importante quanto a saúde física. O estresse ocupacional pode levar a problemas sérios como burnout, ansiedade e depressão.</p>
+          
+          <p><strong>Dicas para manter a saúde mental:</strong></p>
+          <p>• Estabeleça limites entre trabalho e vida pessoal<br>
+          • Faça pausas regulares durante o expediente<br>
+          • Pratique técnicas de relaxamento<br>
+          • Mantenha comunicação aberta com colegas<br>
+          • Busque ajuda profissional quando necessário</p>
+        `,
+        autor: "Dra. Juliana Costa",
+        data: "2024-11-10",
+        categoria: "Saúde Mental",
+        tempo: "6 min",
+        imagem: "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=800"
+      },
+      {
+        titulo: "Prevenção de Doenças Cardiovasculares",
+        resumo: "Medidas essenciais para manter o coração saudável.",
+        conteudo: `
+          <p>As doenças cardiovasculares são a principal causa de morte no mundo, mas muitas delas podem ser prevenidas com hábitos saudáveis.</p>
+          
+          <p><strong>Medidas preventivas:</strong></p>
+          <p>• Não fume e evite o fumo passivo<br>
+          • Mantenha uma alimentação saudável<br>
+          • Pratique exercícios regularmente<br>
+          • Controle o estresse<br>
+          • Faça check-ups regulares</p>
+          
+          <p>Controlar pressão arterial, colesterol e diabetes é fundamental para prevenir problemas cardíacos.</p>
+        `,
+        autor: "Dr. Fernando Almeida",
+        data: "2024-11-08",
+        categoria: "Prevenção",
+        tempo: "8 min",
+        imagem: "https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?w=800"
+      }
+    ];
+
+    initialArticles.forEach(article => this.createArticle(article));
+    console.log('✅ Artigos iniciais carregados em memória!');
+  }
+}
+
+// ============================================
+// 6. src/controllers/article.controller.ts
+// ============================================
+import { Request, Response } from 'express';
+import { ArticleService } from '../services/article.service';
+import { CreateArticleDTO, UpdateArticleDTO } from '../types/article.types';
+
+export class ArticleController {
+  constructor(private articleService: ArticleService) {}
+
+  // GET /api/articles - Listar todos os artigos
+  getAllArticles = (req: Request, res: Response): void => {
+    try {
+      const { categoria, autor, search } = req.query;
+
+      const articles = this.articleService.getAllArticles({
+        categoria: categoria as string,
+        autor: autor as string,
+        search: search as string
+      });
+
+      const total = articles.length;
+
+      res.status(200).json({
+        success: true,
+        data: articles,
+        total
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao buscar artigos',
+        error: error.message
+      });
+    }
+  };
+
+  // GET /api/articles/:id - Buscar artigo por ID
+  getArticleById = (req: Request, res: Response): void => {
+    try {
+      const id = parseInt(req.params.id);
+
+      if (isNaN(id)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID inválido'
+        });
+        return;
+      }
+
+      const article = this.articleService.getArticleById(id);
+
+      if (!article) {
+        res.status(404).json({
+          success: false,
+          message: 'Artigo não encontrado'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: article
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao buscar artigo',
+        error: error.message
+      });
+    }
+  };
+
+  // POST /api/articles - Criar novo artigo
+  createArticle = (req: Request, res: Response): void => {
+    try {
+      const articleData: CreateArticleDTO = req.body;
+
+      // Validações básicas
+      if (!articleData.titulo || !articleData.resumo || !articleData.conteudo) {
+        res.status(400).json({
+          success: false,
+          message: 'Título, resumo e conteúdo são obrigatórios'
+        });
+        return;
+      }
+
+      const article = this.articleService.createArticle(articleData);
+
+      res.status(201).json({
+        success: true,
+        message: 'Artigo criado com sucesso',
+        data: article
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: 'Erro ao criar artigo',
+        error: error.message
+      });
+    }
+  };
+
+  // PUT /api/articles/:id - Atualizar artigo
+  updateArticle = (req: Request, res: Response): void => {
+    try {
+      const id = parseInt(req.params.id);
+      const updateData: UpdateArticleDTO = req.body;
+
+      if (isNaN(id)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID inválido'
+        });
+        return;
+      }
+
+      const article = this.articleService.updateArticle(id, updateData);
+
+      if (!article) {
+        res.status(404).json({
+          success: false,
+          message: 'Artigo não encontrado'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Artigo atualizado com sucesso',
+        data: article
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: 'Erro ao atualizar artigo',
+        error: error.message
+      });
+    }
+  };
+
+  // DELETE /api/articles/:id - Deletar artigo
+  deleteArticle = (req: Request, res: Response): void => {
+    try {
+      const id = parseInt(req.params.id);
+
+      if (isNaN(id)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID inválido'
+        });
+        return;
+      }
+
+      const deleted = this.articleService.deleteArticle(id);
+
+      if (!deleted) {
+        res.status(404).json({
+          success: false,
+          message: 'Artigo não encontrado'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Artigo deletado com sucesso'
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao deletar artigo',
+        error: error.message
+      });
+    }
+  };
+
+  // GET /api/articles/category/:categoria - Buscar por categoria
+  getArticlesByCategory = (req: Request, res: Response): void => {
+    try {
+      const { categoria } = req.params;
+      const articles = this.articleService.getArticlesByCategory(categoria);
+
+      res.status(200).json({
+        success: true,
+        data: articles,
+        total: articles.length
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao buscar artigos por categoria',
+        error: error.message
+      });
+    }
+  };
+}
+
+// ============================================
+// 7. src/modules/article.module.ts
+// ============================================
+import { Router } from 'express';
+import { ArticleService } from '../services/article.service';
+import { ArticleController } from '../controllers/article.controller';
+
+export class ArticleModule {
+  public router: Router;
+  private articleService: ArticleService;
+  private articleController: ArticleController;
+
+  constructor() {
+    this.router = Router();
+    this.articleService = new ArticleService();
+    this.articleController = new ArticleController(this.articleService);
+    this.initializeRoutes();
+  }
+
+  private initializeRoutes(): void {
+    // Listar todos os artigos (com filtros opcionais)
+    // Query params: ?categoria=Nutrição&autor=Maria&search=hidratação
+    this.router.get('/', this.articleController.getAllArticles);
+
+    // Buscar artigos por categoria
+    this.router.get('/category/:categoria', this.articleController.getArticlesByCategory);
+
+    // Buscar artigo por ID
+    this.router.get('/:id', this.articleController.getArticleById);
+
+    // Criar novo artigo
+    this.router.post('/', this.articleController.createArticle);
+
+    // Atualizar artigo
+    this.router.put('/:id', this.articleController.updateArticle);
+
+    // Deletar artigo
+    this.router.delete('/:id', this.articleController.deleteArticle);
+  }
+
+  public getRouter(): Router {
+    return this.router;
+  }
+}
+
+// ============================================
+// 8. src/server.ts
+// ============================================
+import express, { Application, Request, Response } from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { ArticleModule } from './modules/article.module';
+
+dotenv.config();
+
+class Server {
+  private app: Application;
+  private port: number;
+
+  constructor() {
+    this.app = express();
+    this.port = parseInt(process.env.PORT || '3000');
+    
+    this.configureMiddlewares();
+    this.configureRoutes();
+  }
+
+  private configureMiddlewares(): void {
+    // CORS - permite requisições do frontend
+    this.app.use(cors());
+    
+    // Parse JSON
+    this.app.use(express.json());
+    
+    // Parse URL-encoded
+    this.app.use(express.urlencoded({ extended: true }));
+
+    // Log de requisições
+    this.app.use((req, res, next) => {
+      console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+      next();
+    });
+  }
+
+  private configureRoutes(): void {
+    // Rota de health check
+    this.app.get('/', (req: Request, res: Response) => {
+      res.json({
+        message: '🏥 InfoClin API - Sistema de Artigos de Saúde',
+        version: '1.0.0',
+        status: 'online',
+        endpoints: {
+          articles: '/api/articles',
+          health: '/',
+          docs: '/api/articles (GET, POST, PUT, DELETE)'
+        }
+      });
+    });
+
+    // Módulo de artigos
+    const articleModule = new ArticleModule();
+    this.app.use('/api/articles', articleModule.getRouter());
+
+    // Rota não encontrada
+    this.app.use('*', (req: Request, res: Response) => {
+      res.status(404).json({
+        success: false,
+        message: 'Rota não encontrada',
+        availableRoutes: [
+          'GET /',
+          'GET /api/articles',
+          'GET /api/articles/:id',
+          'GET /api/articles/category/:categoria',
+          'POST /api/articles',
+          'PUT /api/articles/:id',
+          'DELETE /api/articles/:id'
+        ]
+      });
+    });
+  }
+
+  public start(): void {
+    this.app.listen(this.port, () => {
+      console.log('===========================================');
+      console.log('🏥 InfoClin API');
+      console.log('===========================================');
+      console.log(`✅ Servidor rodando na porta ${this.port}`);
+      console.log(`🌐 http://localhost:${this.port}`);
+      console.log(`📋 API: http://localhost:${this.port}/api/articles`);
+      console.log('===========================================');
+    });
+  }
+}
+
+// Inicializar servidor
+const server = new Server();
+server.start();
+
+// ============================================
+// COMANDOS PARA RODAR O PROJETO
+// ============================================
+/*
+
+1. Criar o projeto:
+   mkdir infoclin-api
+   cd infoclin-api
+
+2. Inicializar package.json:
+   npm init -y
+
+3. Instalar dependências:
+   npm install express cors dotenv
+   npm install -D typescript @types/express @types/cors @types/node ts-node-dev
+
+4. Copiar os arquivos acima para suas respectivas pastas
+
+5. Rodar em desenvolvimento:
+   npm run dev
+
+6. Testar a API:
+   GET    http://localhost:3000/api/articles
+   GET    http://localhost:3000/api/articles/1
+   GET    http://localhost:3000/api/articles/category/Nutrição
+   POST   http://localhost:3000/api/articles
+   PUT    http://localhost:3000/api/articles/1
+   DELETE http://localhost:3000/api/articles/1
+
+*/
